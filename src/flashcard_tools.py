@@ -5,6 +5,7 @@ from langchain_core.messages import SystemMessage
 from pydantic import BaseModel, Field
 from typing import Type
 import json
+import re
 
 
 class FlashcardInput(BaseModel):
@@ -100,7 +101,10 @@ class ConceptFlashcardTool(BaseTool):
 def create_flashcard_agent():
     # Initialise LLM
     llm = ChatOllama(
-        model="phi4-mini:latest",
+        # model="phi4-mini:latest",
+        #model="qwen3:4b",
+        model="qwen2.5:7b",
+        # model="mistral:7b",
         temperature=0.3,
         max_tokens=2000,
     )
@@ -144,30 +148,37 @@ After creating a flashcard, summarise what you created."""
     return agent
 
 
-def process_slides_with_agent(docs, max_slides=5):
+def process_slides_with_agent(docs, max_slides=1000):
     """Process slides using the agentic system"""
     agent = create_flashcard_agent()
     all_flashcards = []
-
-    for i, doc in enumerate(docs[:max_slides]):  # Limit for testing
+    end = min(max_slides, len(docs))
+    for i, doc in enumerate(docs[:end]):  # Limit for testing
         print(f"\n=== Processing Slide {i + 1} ===")
         print(f"Content preview: {doc.page_content[:200]}...")
 
         try:
-            # Let the agent decide which tool to use
-            result = agent.run(
-                f"Analyze this slide content and create the most appropriate flashcard. "
-                f"Slide number: {i + 1}\n"
-                f"Slide content: {doc.page_content}"
-            )
+            # Let the agent decide which tool to use 
+            query = f"Analyse this slide content and create the most appropriate flashcard. \nSlide number: {i+1}\n### START SLIDE CONTENT ### {doc.page_content} ### END SLIDE CONTENT ###"
+            dict_query = {"input": query}
+
+            print(f"query: {dict_query}")
+
+            result = agent.invoke(dict_query)
+            str_result = result['messages'][0].content
+
+
+            #print(f"Agent result: {result}")
+            print(f"Agent result: {str_result}")
+
 
             # Extract flashcard from result
-            flashcard = extract_flashcard_from_result(result)
+            flashcard = extract_flashcard_from_result(str_result)
             if flashcard:
                 flashcard["slide_number"] = i + 1
                 flashcard["metadata"] = doc.metadata
                 all_flashcards.append(flashcard)
-                print(f"Created: {flashcard.get('type', 'unknown')} flashcard")
+                print(f"Created flashcard")
 
         except Exception as e:
             print(f"Error processing slide {i + 1}: {str(e)}")
@@ -180,22 +191,13 @@ def process_slides_with_agent(docs, max_slides=5):
 
 def extract_flashcard_from_result(result: str) -> dict:
     """Extract structured flashcard from agent result"""
-    try:
-        # Look for JSON in the result
-        if "{" in result and "}" in result:
-            json_str = result[result.find("{") : result.rfind("}") + 1]
-            return json.loads(json_str)
-    except Exception:
-        pass
-
-    # Fallback: create basic structure
-    return {
-        "question": "Generated from slide",
-        "answer": result[:500],  # Truncate if too long
-        "type": "general",
-    }
-
-
+    if "Q:" in result and "A:" in result:
+        end_index = result.rfind("A:")+3
+        dict_json = {"question": result[3:end_index-3], "answer": result[end_index:]}
+        print(f"json output: {dict_json}")
+        return dict_json
+   
+   
 def create_fallback_flashcard(content: str, slide_num: int) -> dict:
     """Create a basic flashcard when agent fails"""
     return {

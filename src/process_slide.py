@@ -16,15 +16,15 @@ loader = PyPDFLoader(
 docs = loader.load()
 pprint.pp(docs[0].metadata)
 
-
 # NEW: Process with agent
 flashcards = process_slides_with_agent(
-    docs, max_slides=3
+    docs, 
+    #max_slides=10
 )  # Start with 3 slides for testing
 
 print(f"\n=== Generated {len(flashcards)} Flashcards ===")
 for i, card in enumerate(flashcards):
-    print(f"\nFlashcard {i + 1} (Slide {card['slide_number']}, Type: {card['type']}):")
+    print(f"\nFlashcard {i + 1} (Slide {card['slide_number']}:")
     print(f"Q: {card['question']}")
     print(f"A: {card['answer']}")
 
